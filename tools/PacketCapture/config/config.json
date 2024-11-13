@@ -1,0 +1,26 @@
+{
+  "app": {
+    "is_servant": false,
+    "listen_port": 8080,
+    "enable_monitor": true,
+    "enable_code_server": true,
+    "interface_name": "enp4s3",
+    "debug": false,
+    "instance_capacity": 1800,
+    "monitor_interval": 1,
+    "parallel_num": 16
+  },
+  "dependency": {
+    "etcd_port": 2379,
+    "influxdb_port": 8086,
+    "influxdb_token": "1145141919810",
+    "influxdb_org" : "satellite_emulator",
+    "influxdb_bucket": "monitor",
+    "code_server_port": 8079,
+    "docker_host_path": "/var/run/docker.sock"
+  },
+  "device": {
+    "FixPhysicalLink": [],
+    "MultiplexPhysicalLink": []
+  }
+}
