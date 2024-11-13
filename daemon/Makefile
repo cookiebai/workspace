@@ -7,6 +7,7 @@ build:
 	cp share/static/dist/version.txt ./opensn-daemon/
 	cp depend-bin/gotty ./opensn-daemon/
 	cp -r scripts ./opensn-daemon/
+	sudo rm -rf opensn-daemon/runtime
 	tar cvf opensn-daemon.tar.gz opensn-daemon/*
 clean:
 	-sudo rm -rf ./opensn-daemon

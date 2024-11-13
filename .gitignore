@@ -26,3 +26,4 @@ node-daemon/NodeDaemon
 #[Build Target]
 daemon/build
 tools/namespace-generator/generator
+daemon/share/static/
