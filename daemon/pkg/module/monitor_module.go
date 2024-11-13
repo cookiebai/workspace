@@ -176,16 +176,32 @@ func captureNodeStatus(sigChan chan int, errChan chan error) {
 				logrus.Errorf("Get Instance Performance of Instance %s Error: %s", instanceInfo.InstanceID, err.Error())
 				return
 			}
-			linkStatus, err := utils.GetInstanceLinkResourceInfo(instanceInfo.Pid)
-			if err != nil {
-				logrus.Errorf("Get Link Performance of Instance %s Error: %s", instanceInfo.InstanceID, err.Error())
-				return
-			}
+			// linkStatus, err := utils.GetInstanceLinkResourceInfo(instanceInfo.Pid)
+			// if err != nil {
+			// 	logrus.Errorf("Get Link Performance of Instance %s Error: %s", instanceInfo.InstanceID, err.Error())
+			// 	return
+			// }
 			localLock.Lock()
-			thisInstanceLinkResource[instanceInfo.InstanceID] = linkStatus
+			// thisInstanceLinkResource[instanceInfo.InstanceID] = linkStatus
 			thisInstanceResource[instanceInfo.InstanceID] = instanceResouce
 			localLock.Unlock()
 		}, instancePidPairs, 128)
+		allLinkResourceRaw, err := utils.GetAllLinkResourceInfo()
+		if err != nil {
+			logrus.Errorf("Get Link Performance of Node %d Error: %s", key.NodeIndex, err.Error())
+			errChan <- err
+		}
+		for _, instanceInfo := range instances {
+			if _, ok := thisInstanceLinkResource[instanceInfo.InstanceID]; !ok {
+				thisInstanceLinkResource[instanceInfo.InstanceID] = make(map[string]*utils.LinkResourceRaw)
+			}
+			for linkID := range instanceInfo.Connections {
+				if linkInfo, ok := allLinkResourceRaw[linkID]; ok {
+					thisInstanceLinkResource[instanceInfo.InstanceID][linkID] = linkInfo
+				}
+			}
+		}
+
 		wg.Wait()
 		if withPrev {
 			points := uploadHostPerformanceData(

@@ -221,3 +221,27 @@ func GetInstanceLinkResourceInfo(pid int) (map[string]*LinkResourceRaw, error) {
 	}
 	return ret, nil
 }
+
+func GetAllLinkResourceInfo() (map[string]*LinkResourceRaw, error) {
+	ret := make(map[string]*LinkResourceRaw)
+	filePath := fmt.Sprintf("/proc/1/net/dev")
+	devStat, err := net.IOCountersByFile(true, filePath)
+	if err != nil {
+		errMsg := fmt.Sprintf("Get Instance Link Resource Error: %s", err.Error())
+		logrus.Warn(errMsg)
+		return ret, err
+	}
+	for _, v := range devStat {
+		ret[v.Name] = &LinkResourceRaw{
+			RecvByte:     v.BytesRecv,
+			SendByte:     v.BytesSent,
+			RecvPack:     v.PacketsRecv,
+			SendPack:     v.PacketsSent,
+			SendErrPack:  v.Errout,
+			RecvErrPack:  v.Errin,
+			RecvDropPack: v.Dropin,
+			SendDropPack: v.Dropout,
+		}
+	}
+	return ret, nil
+}
