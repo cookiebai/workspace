@@ -4,4 +4,4 @@ build:
 	rm -rf ./TopoConfigurators
 
 build-file: build
-	sudo docker save -o opensn_codeserver.tar.gz
+	sudo docker save realssd/opensn_codeserver -o opensn_codeserver.tar.gz
