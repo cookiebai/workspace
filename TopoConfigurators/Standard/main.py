@@ -73,8 +73,8 @@ if __name__ == "__main__":
             node_link_map[node_index] = {}
             link_map = cli.get_link_map(node_index)
             for link_id,link_info in link_map.items():
-                if link_info.address_infos[0] is None or \
-                    link_info.address_infos[1] is None:
+                if LINK_V4_ADDR_KEY not in link_info.address_infos[0] or \
+                    LINK_V4_ADDR_KEY not in link_info.address_infos[1] is None:
                     if link_id not in address_map.keys():
                         address_map[link_id] = alloc_ipv4(30)
                     

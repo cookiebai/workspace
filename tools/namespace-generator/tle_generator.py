@@ -77,7 +77,7 @@ def generate_tle(orbit_num: int, orbit_satellite_num: int, all_start_latitude, a
         topo[str(i)] = array
     return satellites, topo
 
-constellation_size_list = ["6x11","12x11","31x31","40x18","72x22"]
+constellation_size_list = ["6x11","31x31","40x18","72x22"]
 
 if __name__ == "__main__":
     ground_station_num = 2
