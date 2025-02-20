@@ -1,7 +1,8 @@
 from datetime import datetime
 from type_model_def import EmulationTypeConfig, TopologyLink, TopologyInstance, TopologyConfig
-from instance_types import EX_TLE0_KEY,EX_TLE1_KEY,EX_TLE2_KEY,EX_ORBIT_INDEX,EX_SATELLITE_INDEX,EX_AREA_KEY,EX_AREA_X,EX_AREA_Y,EX_TOTAL_AREA_X,EX_TOTAL_AREA_Y
+from instance_types import EX_TLE0_KEY,EX_TLE1_KEY,EX_TLE2_KEY,EX_ORBIT_INDEX,EX_SATELLITE_INDEX,EX_LATITUDE_KEY,EX_LONGITUDE_KEY,EX_GROUND_INDEX,TYPE_GROUND_STATION,TYPE_SATELLITE,EX_AREA_KEY,EX_ALTITUDE_KEY
 from address_type import LINK_V4_ADDR_KEY
+import random
 import json
 def get_year_day(now_time: datetime) -> (int, float):
     year = now_time.year
@@ -16,48 +17,6 @@ def get_year_day(now_time: datetime) -> (int, float):
     day += (now_time - datetime(year, 1, 1)).days
 
     return year % 100, day
-
-def assign_area(satellite_grid: list[list[TopologyInstance]], area_x: int, area_y: int):
-    area_x_toal = len(satellite_grid) // area_x
-    area_y_total = len(satellite_grid[0]) // area_y
-    for i in range(len(satellite_grid)):
-        for j in range(len(satellite_grid[i])):
-            grid_x = i // area_x
-            grid_y = j // area_y
-            satellite_grid[i][j].extra[EX_AREA_KEY] = f'0.0.0.{grid_x*area_y_total+grid_y+1}'
-            satellite_grid[i][j].extra[EX_AREA_X] = str(grid_x)
-            satellite_grid[i][j].extra[EX_AREA_Y] = str(grid_y)
-            satellite_grid[i][j].extra[EX_TOTAL_AREA_X] = str(area_x_toal)
-            satellite_grid[i][j].extra[EX_TOTAL_AREA_Y] = str(area_y_total)
-
-
-def assign_address(satellite_grid: list[list[TopologyInstance]], link_array: list[TopologyLink]):
-    area_address_map = {}
-    for link in link_array:
-        node_x_0 = link.end_indexes[0] // len(satellite_grid[0])
-        node_y_0 = link.end_indexes[0] % len(satellite_grid[0])
-        area_index_0 = satellite_grid[node_x_0][node_y_0].extra[EX_AREA_KEY].split('.')[-1]
-        node_x_1 = link.end_indexes[1] // len(satellite_grid[0])
-        node_y_1 = link.end_indexes[1] % len(satellite_grid[0])
-        area_index_1 = satellite_grid[node_x_1][node_y_1].extra[EX_AREA_KEY].split('.')[-1]
-        if area_index_0 == area_index_1:
-            if area_index_0 not in area_address_map:
-                area_address_map[area_index_0] = 0
-            addr_index = area_address_map[area_index_0]
-            link.address_infos[0][LINK_V4_ADDR_KEY] = f"10.{area_index_0}.{addr_index//256}.{addr_index%256 + 1}/30"
-            link.address_infos[1][LINK_V4_ADDR_KEY] = f"10.{area_index_0}.{addr_index//256}.{addr_index%256 + 2}/30"
-            area_address_map[area_index_0] += 4
-        else:
-            if area_index_0 not in area_address_map:
-                area_address_map[area_index_0] = 0
-            if area_index_1 not in area_address_map:
-                area_address_map[area_index_1] = 0
-            addr_index_0 = area_address_map[area_index_0]
-            addr_index_1 = area_address_map[area_index_1]
-            link.address_infos[0][LINK_V4_ADDR_KEY] = f"10.{area_index_0}.{addr_index_0//256}.{addr_index_0%256 + 1}/30"
-            link.address_infos[1][LINK_V4_ADDR_KEY] = f"10.{area_index_1}.{addr_index_1//256}.{addr_index_1%256 + 1}/30"
-            area_address_map[area_index_0] += 4
-            area_address_map[area_index_1] += 4
 
 
 def str_checksum(line: str) -> int:
@@ -118,31 +77,36 @@ def generate_tle(orbit_num: int, orbit_satellite_num: int, all_start_latitude, a
         topo[str(i)] = array
     return satellites, topo
 
-area_size_list = ["1x9","1x18","2x9","2x18","4x9","4x18","8x9","8x18"]
+constellation_size_list = ["6x11","12x11","31x31","40x18","72x22"]
 
 if __name__ == "__main__":
-    grid_x = 40
-    grid_y = 18
-    for area_size in area_size_list:
-        area_x = int(area_size.split('x')[0])
-        area_y = int(area_size.split('x')[1])
+    ground_station_num = 2
+    emu_config :dict[str,EmulationTypeConfig] = {
+        "Satellite": EmulationTypeConfig("docker.io/realssd/satellite-router", {}, "50M", "128M").__dict__,
+        "GroundStation": EmulationTypeConfig("docker.io/realssd/ground-station", {}, "50M", "128M").__dict__
+    }
+    emu_config_file = open("emu_config.json", "w")
+    emu_config_file.write(json.dumps(emu_config))
+    emu_config_file.close()
+    for constellation_size in constellation_size_list:
+        constellation_x = int(constellation_size.split('x')[0])
+        constellation_y = int(constellation_size.split('x')[1])
         start_longitude = 0
         start_latitude = 0
         orbit_angle = 90
-        delta_percent = 1 / grid_x
+        delta_percent = 1 / constellation_x
         period = 1 / 13.1507
-        emu_config :dict[str,EmulationTypeConfig] = {
-            "Satellite": EmulationTypeConfig("docker.io/realssd/satellite-router-area", {}, "50M", "128M").__dict__
-        }
-        sat, topos = generate_tle(grid_x, grid_y, start_longitude, start_latitude, orbit_angle, delta_percent, period)
+        
+        sat, topos = generate_tle(constellation_x, constellation_y, start_longitude, start_latitude, orbit_angle, delta_percent, period)
         node_grid = []
-        for i in range(grid_x):
+        for i in range(constellation_x):
             array = []
-            for j in range(grid_y):
-                array.append(TopologyInstance("Satellite", {
-                    EX_TLE0_KEY: sat[area2line(i, j, grid_y, grid_x)][0],
-                    EX_TLE1_KEY: sat[area2line(i, j, grid_y, grid_x)][1],
-                    EX_TLE2_KEY: sat[area2line(i, j, grid_y, grid_x)][2],
+            for j in range(constellation_y):
+                array.append(TopologyInstance(TYPE_SATELLITE, {
+                    EX_TLE0_KEY: sat[area2line(i, j, constellation_y, constellation_x)][0],
+                    EX_TLE1_KEY: sat[area2line(i, j, constellation_y, constellation_x)][1],
+                    EX_TLE2_KEY: sat[area2line(i, j, constellation_y, constellation_x)][2],
+                    EX_AREA_KEY:"0.0.0.0",
                     EX_ORBIT_INDEX: str(i),
                     EX_SATELLITE_INDEX: str(j),
                 }))
@@ -151,19 +115,25 @@ if __name__ == "__main__":
         for l0_str,l1_list in topos.items():
             for l1 in l1_list:
                 links.append(TopologyLink("vlink", [int(l0_str),l1],{},[{},{}],{}))
-        assign_area(node_grid, area_x, area_y)
-        assign_address(node_grid, links)
-        emu_config_file = open("emu_config.json", "w")
-        emu_config_file.write(json.dumps(emu_config))
-        emu_config_file.close()
+        
         topology_config = TopologyConfig()
-        for i in range(grid_x):
-            for j in range(grid_y):
+        for i in range(constellation_x):
+            for j in range(constellation_y):
                 topology_config.instances.append(node_grid[i][j])
+
+        for index in range(ground_station_num):
+            topology_config.instances.append(TopologyInstance(TYPE_GROUND_STATION, {
+                    EX_GROUND_INDEX: str(index),
+                    EX_LATITUDE_KEY:str(random.random()*180 - 90),
+                    EX_LONGITUDE_KEY:str(random.random()*360 - 180),
+                    EX_ALTITUDE_KEY:str(random.random()*10)
+                })
+            )
         
         for link in links:
             topology_config.links.append(link)
-
-        topology_config_file = open("topology_config_oneweb_%d_%d.json"%(area_x,area_y), "w")
-        print(f"Generate topology_config_oneweb_{area_x}_{area_y}.json")
+        
+        topology_config_file = open("topology_config_%d_%d.json"%(constellation_x,constellation_y), "w")
+        print(f"Generate topology_config_{constellation_x}_{constellation_y}.json")
         topology_config_file.write(topology_config.toJson())
+        topology_config_file.close()

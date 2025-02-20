@@ -11,7 +11,7 @@ EX_AREA_X = "AreaX"
 EX_AREA_Y = "AreaY"
 EX_TOTAL_AREA_X = "TotalAreaX"
 EX_TOTAL_AREA_Y = "TotalAreaY"
-
+EX_GROUND_INDEX = "GroundStationIndex"
 
 TYPE_GROUND_STATION = "GroundStation"
 TYPE_GROUND_TERMINAL = "GroundTerminal"
