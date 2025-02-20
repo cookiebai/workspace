@@ -1,7 +1,8 @@
 build:
 	-mkdir opensn_build
 	cd ui && make build
-	cp -r ui/build/ daemon/static/dist/build/
+	mkdir -p daemon/share/static/dist/
+	cp -r ui/build/ daemon/share/static/dist/
 	cd container-base && make build
 	cd dependencies && make build
 	cd daemon && make build
