@@ -7,6 +7,9 @@ from opensn.model.position import Position
 from instance_types import TYPE_SATELLITE,TYPE_GROUND_STATION
 from instance_types import EX_TLE0_KEY,EX_TLE1_KEY,EX_TLE2_KEY,EX_LATITUDE_KEY,EX_LONGITUDE_KEY,EX_ALTITUDE_KEY
 from opensn.model.instance import Instance
+
+def deg2rad(deg: float) -> float:
+    return deg / 180 * math.pi
         
 def calculate_postion(instance: Instance,time:datetime.datetime) -> Position:
     ret = Position()
@@ -22,9 +25,9 @@ def calculate_postion(instance: Instance,time:datetime.datetime) -> Position:
         ret.longitude = ephem_obj.sublong
         ret.altitude = ephem_obj.elevation
     elif instance.type == TYPE_GROUND_STATION:
-        ret.latitude = float(instance.extra[EX_LATITUDE_KEY])
-        ret.longitude = float(instance.extra[EX_LONGITUDE_KEY])
-        ret.altitude = float(instance.extra[EX_ALTITUDE_KEY])
+        ret.latitude = deg2rad(float(instance.extra[EX_LATITUDE_KEY]))
+        ret.longitude = deg2rad(float(instance.extra[EX_LONGITUDE_KEY]))
+        ret.altitude = deg2rad(float(instance.extra[EX_ALTITUDE_KEY]))
     return ret
 
 def distance_meter(one:Position,another:Position) -> float: # meter
