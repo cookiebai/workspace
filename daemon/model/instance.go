@@ -23,7 +23,7 @@ type Instance struct {
 	InstanceID  string                       `json:"instance_id"`
 	Name        string                       `json:"name"`
 	Type        string                       `json:"type"`
-	Image       string                       `json:"position_changeable"`
+	Image       string                       `json:"image"`
 	Extra       map[string]string            `json:"extra"`
 	DeviceInfo  map[string]DeviceRequireInfo `json:"device_need"`
 	Resource    ResourceLimit                `json:"resource"`
