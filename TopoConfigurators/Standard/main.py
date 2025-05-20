@@ -186,6 +186,9 @@ if __name__ == "__main__":
                     #         logger.info("disconnect %s"%link_id)
                     link_info.parameter[PARAMETER_KEY_CONNECT] = 1
 
+                if link_info.end_infos[0].instance_type == "" :
+                    continue
+
                 distance = distance_meter(
                     position_map[link_info.end_infos[0].instance_id],
                     position_map[link_info.end_infos[1].instance_id]
