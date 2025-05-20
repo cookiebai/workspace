@@ -126,8 +126,6 @@ func ParseLinkFromBytes(seq []byte) (model.Link, error) {
 	return realLink, err
 }
 
-
-
 func ParseLinkFromBase(config model.LinkBase) (model.Link, error) {
 	var realLink model.Link
 
@@ -135,7 +133,9 @@ func ParseLinkFromBase(config model.LinkBase) (model.Link, error) {
 	case VirtualLinkType:
 		vLink := CreateVethLinkObject(config)
 		realLink = vLink
-
+	case FixPhysicalLinkType:
+		fpLink := CreateFixPhysLinkObject(config)
+		realLink = fpLink
 	case "":
 		realLink = &VethLink{}
 	default:

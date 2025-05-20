@@ -218,99 +218,102 @@ func (l *FixPhysLink) enableSameMachine(brIndex int) error {
 }
 
 func (l *FixPhysLink) enableCrossMachine(brIndex int) error {
+	var targetNodeInfo *model.Node
+	var err error
 	for i, v := range l.EndInfos {
 		if v.EndNodeIndex != key.NodeIndex {
 			continue
 		}
-		targetNodeInfo, err := getNodeInfo(l.EndInfos[1-i].EndNodeIndex)
+		targetNodeInfo, err = getNodeInfo(l.EndInfos[1-i].EndNodeIndex)
 		if err != nil {
 			return err
 		}
-		for i, v := range l.EndInfos {
-			if v.EndNodeIndex != key.NodeIndex {
-				vxlanDev := netlink.Vxlan{
+	}
+	for i, v := range l.EndInfos {
+		if v.EndNodeIndex != key.NodeIndex {
+			vxlanDev := netlink.Vxlan{
+				LinkAttrs: netlink.LinkAttrs{
+					Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
+					TxQLen:      -1,
+					MasterIndex: brIndex,
+				},
+				VxlanId:  l.LinkIndex,
+				SrcAddr:  key.SelfNode.L3AddrV4,
+				Group:    targetNodeInfo.L3AddrV4,
+				Port:     4789,
+				Learning: true,
+				L2miss:   true,
+				L3miss:   true,
+			}
+
+			logrus.Infof("Create Vxlan %v", vxlanDev)
+			err = netlink.LinkAdd(&vxlanDev)
+			if err != nil {
+				logrus.Errorf("Add Vxlan Link %v Error: %s", *l, err.Error())
+				continue
+			}
+			err = netlink.LinkSetUp(&vxlanDev)
+			if err != nil {
+				logrus.Errorf("Set Veth Peer Link %v Up Error: %s", *l, err.Error())
+			}
+		} else {
+			if i != 0 {
+				instancePid := data.WatchInstancePid(v.InstanceID)
+				veth := &netlink.Veth{
 					LinkAttrs: netlink.LinkAttrs{
 						Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
-						TxQLen:      -1,
 						MasterIndex: brIndex,
 					},
-					VxlanId:  l.LinkIndex,
-					SrcAddr:  key.SelfNode.L3AddrV4,
-					Group:    targetNodeInfo.L3AddrV4,
-					Port:     4789,
-					Learning: true,
-					L2miss:   true,
-					L3miss:   true,
+					PeerName:      l.GetLinkID(),
+					PeerNamespace: netlink.NsPid(instancePid),
 				}
 
-				logrus.Infof("Create Vxlan %v", vxlanDev)
-				err = netlink.LinkAdd(&vxlanDev)
+				err = netlink.LinkAdd(veth)
 				if err != nil {
-					logrus.Errorf("Add Vxlan Link %v Error: %s", *l, err.Error())
+					logrus.Errorf("Add Veth Peer Link %v Error: %s", *l, err.Error())
 					continue
 				}
-				err = netlink.LinkSetUp(&vxlanDev)
+				err = netlink.LinkSetUp(veth)
 				if err != nil {
 					logrus.Errorf("Set Veth Peer Link %v Up Error: %s", *l, err.Error())
 				}
 			} else {
-				if i != 0 {
-					instancePid := data.WatchInstancePid(v.InstanceID)
-					veth := &netlink.Veth{
-						LinkAttrs: netlink.LinkAttrs{
-							Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
-							MasterIndex: brIndex,
-						},
-						PeerName:      l.GetLinkID(),
-						PeerNamespace: netlink.NsPid(instancePid),
-					}
-
-					err = netlink.LinkAdd(veth)
-					if err != nil {
-						logrus.Errorf("Add Veth Peer Link %v Error: %s", *l, err.Error())
-						continue
-					}
-					err = netlink.LinkSetUp(veth)
-					if err != nil {
-						logrus.Errorf("Set Veth Peer Link %v Up Error: %s", *l, err.Error())
-					}
-				} else {
-					brLink, err := netlink.LinkByIndex(brIndex)
-					if err != nil {
-						logrus.Errorf("Get Bridge Link %s Error: %s", l.LinkID, err.Error())
-						continue
-					}
-
-					physLink, err := netlink.LinkByName(l.EndInfos[0].InstanceID)
-
-					if err != nil {
-						logrus.Errorf("Get Physical Link %s Error: %s", l.LinkID, err.Error())
-						continue
-					}
-
-					err = netlink.LinkSetAlias(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
-
-					if err != nil {
-						logrus.Errorf("Set Physical Link %s Alias %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
-						continue
-					}
-
-					err = netlink.LinkSetMaster(physLink, brLink)
-					if err != nil {
-						logrus.Errorf("Set Physical Link %s Master Bridge %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
-						continue
-					}
-
-					err = netlink.LinkSetUp(physLink)
-					if err != nil {
-						logrus.Errorf("Set Physical Link %s Up Error: %s", l.EndInfos[0].InstanceID, err.Error())
-						continue
-					}
-
+				brLink, err := netlink.LinkByIndex(brIndex)
+				if err != nil {
+					logrus.Errorf("Get Bridge Link %s Error: %s", l.LinkID, err.Error())
+					continue
 				}
+
+				physLink, err := netlink.LinkByName(l.EndInfos[0].InstanceID)
+
+				if err != nil {
+					logrus.Errorf("Get Physical Link %s Error: %s", l.LinkID, err.Error())
+					continue
+				}
+
+				err = netlink.LinkSetAlias(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
+
+				if err != nil {
+					logrus.Errorf("Set Physical Link %s Alias %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
+					continue
+				}
+
+				err = netlink.LinkSetMaster(physLink, brLink)
+				if err != nil {
+					logrus.Errorf("Set Physical Link %s Master Bridge %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
+					continue
+				}
+
+				err = netlink.LinkSetUp(physLink)
+				if err != nil {
+					logrus.Errorf("Set Physical Link %s Up Error: %s", l.EndInfos[0].InstanceID, err.Error())
+					continue
+				}
+
 			}
 		}
 	}
+
 	return nil
 }
 
