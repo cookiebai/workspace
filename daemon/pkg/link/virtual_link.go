@@ -214,6 +214,7 @@ func (l *VethLink) enableCrossMachine(brIndex int) error {
 						Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
 						TxQLen:      -1,
 						MasterIndex: brIndex,
+						MTU: 4096,
 					},
 					VxlanId:  l.LinkIndex,
 					SrcAddr:  key.SelfNode.L3AddrV4,

@@ -173,7 +173,7 @@ func (l *FixPhysLink) enableSameMachine(brIndex int) error {
 		return err
 	}
 
-	err = netlink.LinkSetAlias(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
+	err = netlink.LinkSetName(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
 
 	if err != nil {
 		logrus.Errorf("Set Physical Link %s Alias %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
@@ -236,6 +236,7 @@ func (l *FixPhysLink) enableCrossMachine(brIndex int) error {
 					Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
 					TxQLen:      -1,
 					MasterIndex: brIndex,
+					MTU:         4096,
 				},
 				VxlanId:  l.LinkIndex,
 				SrcAddr:  key.SelfNode.L3AddrV4,
@@ -291,7 +292,7 @@ func (l *FixPhysLink) enableCrossMachine(brIndex int) error {
 					continue
 				}
 
-				err = netlink.LinkSetAlias(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
+				err = netlink.LinkSetName(physLink, fmt.Sprintf("%s-%d", l.GetLinkID(), 0))
 
 				if err != nil {
 					logrus.Errorf("Set Physical Link %s Alias %s Error: %s", l.EndInfos[0].InstanceID, l.LinkID, err.Error())
@@ -341,7 +342,7 @@ func (l *FixPhysLink) Enable() error {
 }
 func (l *FixPhysLink) Disable() error {
 
-	for i := range l.EndInfos {
+	for i, endInfo := range l.EndInfos {
 		delLink, err := netlink.LinkByName(fmt.Sprintf("%s-%d", l.GetLinkID(), i))
 		if err != nil {
 			err := fmt.Errorf("get sub device from name %s error: %s", fmt.Sprintf("%s-%d", l.GetLinkID(), i), err.Error())
@@ -349,7 +350,7 @@ func (l *FixPhysLink) Disable() error {
 			continue
 		}
 		if l.EndInfos[0].EndNodeIndex == key.NodeIndex && i == 0 {
-			// DO NOTHING
+			err = netlink.LinkSetName(delLink, endInfo.InstanceID)
 		} else {
 			err = netlink.LinkDel(delLink)
 		}
