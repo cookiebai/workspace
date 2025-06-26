@@ -72,6 +72,9 @@ class EmulatorOperator:
     def put_link(self,link_base: LinkBase):
         return put_link(self.etcd_client,link_base)
         
+    def remove_link(self,node_index:int,link_id:str):
+        return remove_link(self.etcd_client,node_index,link_id)
+
     def put_link_async(self,link_base: LinkBase):
         return self.__pool.submit(put_link,self.etcd_client,link_base)
 
