@@ -196,8 +196,17 @@ func captureNodeStatus(sigChan chan int, errChan chan error) {
 				thisInstanceLinkResource[instanceInfo.InstanceID] = make(map[string]*utils.LinkResourceRaw)
 			}
 			for linkID := range instanceInfo.Connections {
-				if linkInfo, ok := allLinkResourceRaw[linkID]; ok {
-					thisInstanceLinkResource[instanceInfo.InstanceID][linkID] = linkInfo
+
+				thisInstanceLinkResource[instanceInfo.InstanceID][linkID] = new(utils.LinkResourceRaw)
+				linkID1 := linkID + "-0"
+				if linkInfo, ok := allLinkResourceRaw[linkID1]; ok {
+					utils.AddLinkResourceRaw(linkInfo, thisInstanceLinkResource[instanceInfo.InstanceID][linkID])
+				}
+
+				linkID2 := linkID + "-1"
+
+				if linkInfo, ok := allLinkResourceRaw[linkID2]; ok {
+					utils.AddLinkResourceRaw(linkInfo, thisInstanceLinkResource[instanceInfo.InstanceID][linkID])
 				}
 			}
 		}

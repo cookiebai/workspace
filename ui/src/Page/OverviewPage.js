@@ -106,6 +106,9 @@ export const Overview = () => {
             GetLinkParameterList((response)=>{
                 setLinkParameter(response.data.data?response.data.data:{})
             })
+            
+        },10000)
+        setInterval(()=>{
             GetAllLinkLastResource((response)=>{
                 let resourceList = response.data.data
                 let maxThroughput = 0
@@ -124,7 +127,7 @@ export const Overview = () => {
                 })
                 setColor(colorMap)
             })
-        },5000)
+        },6000)
     },[])
 
     const items = [

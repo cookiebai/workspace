@@ -87,7 +87,7 @@ func (l *VethLink) Create() error {
 	bridge := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name:   l.GetLinkID(),
-			TxQLen: -1,
+			TxQLen: 0,
 		},
 	}
 
@@ -179,6 +179,7 @@ func (l *VethLink) enableSameMachine(brIndex int) error {
 			LinkAttrs: netlink.LinkAttrs{
 				Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
 				MasterIndex: brIndex,
+				TxQLen:      0,
 			},
 			PeerName:      l.GetLinkID(),
 			PeerNamespace: netlink.NsPid(instancePid),
@@ -214,7 +215,7 @@ func (l *VethLink) enableCrossMachine(brIndex int) error {
 						Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
 						TxQLen:      -1,
 						MasterIndex: brIndex,
-						MTU: 4096,
+						MTU:         4096,
 					},
 					VxlanId:  l.LinkIndex,
 					SrcAddr:  key.SelfNode.L3AddrV4,
@@ -241,6 +242,7 @@ func (l *VethLink) enableCrossMachine(brIndex int) error {
 					LinkAttrs: netlink.LinkAttrs{
 						Name:        fmt.Sprintf("%s-%d", l.GetLinkID(), i),
 						MasterIndex: brIndex,
+						TxQLen:      0,
 					},
 					PeerName:      l.GetLinkID(),
 					PeerNamespace: netlink.NsPid(instancePid),

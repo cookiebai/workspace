@@ -273,7 +273,7 @@ func GetLastLinkResourceDatas(linkIDs []string) ([]model.LinkResource, error) {
 			fmt.Sprintf(
 				`
 				from(bucket:"%s") |>
-				range(start: -1m) |>
+				range(start: -5s) |>
 				filter(fn: (r) => r._measurement == "link_performance" and r.link_id == "%s") |>
 				top(n:1, columns: ["_time"])
 				`, config.GlobalConfig.Dependency.InfluxdbBucket, linkID,

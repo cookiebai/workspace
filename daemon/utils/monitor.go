@@ -62,6 +62,17 @@ type LinkResource struct {
 	SendDropPps float64 `json:"send_drop_pps"`
 }
 
+func AddLinkResourceRaw(from, to *LinkResourceRaw) {
+	to.RecvByte += from.RecvByte
+	to.RecvDropPack += from.RecvDropPack
+	to.RecvErrPack += from.RecvErrPack
+	to.RecvPack += from.RecvPack
+	to.SendByte += from.SendByte
+	to.SendDropPack += from.SendDropPack
+	to.SendErrPack += from.SendErrPack
+	to.SendPack += from.SendPack
+}
+
 func readCpuUsage(filePath string) (float64, error) {
 	found := false
 	var usageUsec float64
