@@ -370,6 +370,9 @@ export const Overview = () => {
                                 <PointGraphics
                                     pixelSize={10}
                                 />
+                                {
+                                    <LabelGraphics text={item.name} font="30px sans-serif" showBackground={true} pixelOffset={new Cartesian2(0, 15)}/>
+                                }
                             </Entity>
                         )
                     })
@@ -405,6 +408,7 @@ export const Overview = () => {
                                         material={linkColor[item.link_id]}
                                         
                                     />
+                                    
                                 </Entity>
                             )
                         } else {
