@@ -1,12 +1,28 @@
 # OpenSN
 
-> To Be Done
-
 [中文版本](readme_zh.md)
 
 [TOC]
 
 ## 1. Statement
+
+If there is an urgent issue receives no response for a long time, please send an email to [luwenhao_2001@outlook.com](luwenhao_2001@outlook.com).
+
+If you use this codebase in your academic research or project, please cite the following paper:
+
+```bibtex
+@ARTICLE{11021408,
+  author={Lu, Wenhao and Wang, Zhiyuan and Zhang, Hefan and Zhang, Shan and Luo, Hongbin},
+  journal={IEEE Transactions on Parallel and Distributed Systems}, 
+  title={OpenSN: An Open Source Library for Emulating LEO Satellite Networks}, 
+  year={2025},
+  volume={36},
+  number={8},
+  pages={1574-1590},
+  keywords={Satellites;Emulation;Low earth orbit satellites;Routing;Containers;Software;Scalability;Computer architecture;Satellite constellations;Topology;Low-earth-orbit satellite constellations;satellite network emulator;container},
+  doi={10.1109/TPDS.2025.3575920}}
+
+```
 
 ## 2. Environment Preparation
 

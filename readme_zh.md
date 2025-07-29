@@ -1,12 +1,29 @@
 # OpenSN
 
-> 非最终版本
-
 [Engilish Version](readme.md) 
 
 [TOC]
 
 ## 1. 声明
+
+如果有比较紧急的issue长时间没有回复，请向[luwenhao_2001@outlook.com](luwenhao_2001@outlook.com)发送邮件
+
+如果您在学术研究或项目中使用了本代码库，请引用以下论文：
+
+```bibtex
+@ARTICLE{11021408,
+  author={Lu, Wenhao and Wang, Zhiyuan and Zhang, Hefan and Zhang, Shan and Luo, Hongbin},
+  journal={IEEE Transactions on Parallel and Distributed Systems}, 
+  title={OpenSN: An Open Source Library for Emulating LEO Satellite Networks}, 
+  year={2025},
+  volume={36},
+  number={8},
+  pages={1574-1590},
+  keywords={Satellites;Emulation;Low earth orbit satellites;Routing;Containers;Software;Scalability;Computer architecture;Satellite constellations;Topology;Low-earth-orbit satellite constellations;satellite network emulator;container},
+  doi={10.1109/TPDS.2025.3575920}}
+
+
+```
 
 ## 2. 环境准备
 
