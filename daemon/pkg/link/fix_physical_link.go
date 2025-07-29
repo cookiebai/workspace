@@ -338,6 +338,11 @@ func (l *FixPhysLink) Enable() error {
 		return err
 	}
 
+	err = l.SetParameters(map[string]int64{}, l.Parameter)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 func (l *FixPhysLink) Disable() error {
