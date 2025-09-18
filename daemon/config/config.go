@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -157,7 +156,7 @@ func InitConfigServantMode(masterAddr string) error {
 	timestampUrl := fmt.Sprintf("http://%s:%d%s", masterAddr, GlobalConfig.App.ListenPort, TimestampUrl)
 
 	err := utils.DoWithRetry(func() error {
-		start := time.Now().UnixMicro()
+		start := time.Now().UnixNano()
 		timestampResp, err := http.Get(timestampUrl)
 		if err != nil {
 			return err
@@ -170,12 +169,9 @@ func InitConfigServantMode(masterAddr string) error {
 		if err != nil {
 			return err
 		}
-		end := time.Now().UnixMicro()
+		end := time.Now().UnixNano()
 		setTime := getTime + ((end - start) >> 1)
-		err = syscall.Settimeofday(&syscall.Timeval{
-			Sec:  setTime / 1000000,
-			Usec: setTime % 1000000,
-		})
+		err = utils.SetSystemTime(setTime/1000000000, setTime%1000000000)
 		if err != nil {
 			return err
 		}

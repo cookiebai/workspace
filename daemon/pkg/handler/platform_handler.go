@@ -76,5 +76,5 @@ func GetCodeServerAddress(ctx *gin.Context) {
 // When call this interface, please record the cost of the request and response time.
 // And set the system time to the response time plus half of the request-response time.
 func GetUnixTimestampMillis(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "%d", time.Now().UnixMicro())
+	ctx.String(http.StatusOK, "%d", time.Now().UnixNano())
 }
