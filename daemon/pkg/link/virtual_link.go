@@ -395,9 +395,14 @@ func (l *VethLink) SetParameters(oldPara, newPara map[string]int64) error {
 				tbfInfo.Limit = uint32(newPara[VethBandwidthParameter])
 				tbfInfo.Rate = uint64(newPara[VethBandwidthParameter])
 				tbfInfo.Buffer = uint32(newPara[VethBandwidthParameter]) / 8
+
 				err = netlink.QdiscReplace(&tbfInfo)
 				if err != nil {
-					logrus.Errorf("Update tbf qdisc error: %s", err.Error())
+					err = netlink.QdiscAdd(&tbfInfo)
+					if err != nil {
+						logrus.Errorf("Set tbf qdisc error: %s", err.Error())
+						return err
+					}
 				}
 			}
 		}
