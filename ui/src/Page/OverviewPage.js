@@ -1,11 +1,11 @@
 import { Button, Descriptions, Divider, List } from "antd";
 import { useEffect,useState, useRef} from "react"
 import { Card, Typography, Badge, message } from "antd"
-import { Cartesian3, Color } from "cesium"
-import { Entity, PolylineGraphics, Viewer,PointGraphics } from "resium";
+import { Cartesian3, Color,Cartesian2 } from "cesium"
+import { Entity, PolylineGraphics, Viewer,PointGraphics, Label, LabelGraphics } from "resium";
 import { AddTopology, GetEmulationConfig, ResetEmulation, StartEmulation, StopEmulation, UpdateInstanceType } from "../Request/emulation";
 import { GetInstanceList } from "../Request/instance";
-import { GetLinkList, GetLinkParameterList } from "../Request/link";
+import { GetColorLink, GetLinkList, GetLinkParameterList } from "../Request/link";
 import { GetNodeList } from "../Request/node";
 import { GetAllPosition } from "../Request/position";
 import { GetAllLinkLastResource, GetAllNodeResource } from "../Request/metrics";
