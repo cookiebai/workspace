@@ -355,7 +355,7 @@ func (l *VethLink) SetParameters(oldPara, newPara map[string]int64) error {
 			continue
 		}
 
-		if dirtyNetem {
+		if dirtyNetem || dirtyTbf {
 			for i, v := range l.EndInfos {
 				if v.EndNodeIndex != key.NodeIndex {
 					continue
@@ -398,11 +398,10 @@ func (l *VethLink) SetParameters(oldPara, newPara map[string]int64) error {
 
 				err = netlink.QdiscReplace(&tbfInfo)
 				if err != nil {
-					err = netlink.QdiscAdd(&tbfInfo)
-					if err != nil {
-						logrus.Errorf("Set tbf qdisc error: %s", err.Error())
-						return err
-					}
+
+					logrus.Errorf("Set tbf qdisc error: %s", err.Error())
+					return err
+
 				}
 			}
 		}
