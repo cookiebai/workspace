@@ -5,15 +5,29 @@ from opensn.const.dict_fields import PARAMETER_KEY_CONNECT,PARAMETER_KEY_DELAY,P
 from opensn.model.link import LinkBase
 from opensn.utils.tools import dec2ra
 from config import ADDR,PORT
-from datetime import datetime
+from datetime import datetime, timedelta
 from trajectory import calculate_postion,distance_meter,select_closest_satellite,get_propagation_delay_s
-from instance_types import TYPE_GROUND_STATION, TYPE_SATELLITE, EX_ORBIT_INDEX,EX_ALTITUDE_KEY,EX_LATITUDE_KEY,EX_LONGITUDE_KEY, EX_AREA_KEY
+# from instance_types import TYPE_GROUND_STATION, TYPE_SATELLITE, EX_ORBIT_INDEX,EX_ALTITUDE_KEY,EX_LATITUDE_KEY,EX_LONGITUDE_KEY, EX_AREA_KEY
+from instance_types import TYPE_GROUND_STATION, TYPE_SATELLITE, EX_ORBIT_INDEX,EX_ALTITUDE_KEY,EX_LATITUDE_KEY,EX_LONGITUDE_KEY, EX_AREA_KEY, EX_TLE0_KEY
 from address_type import LINK_V4_ADDR_KEY
 from time import sleep
+import time
 from address_allocator import alloc_ipv4,format_ipv4
+from traffic_config import load_traffic_config
+from traffic_manager import TrafficManager
+from link_failure_manager import LinkFailureManager
 from loguru import logger
 import json, math
-step_second = 5
+step_second = 1
+TRAFFIC_CONFIG_PATH = "traffic.json"
+# LINK_FAILURE_MATRIX_PATH = "../../link_failure/link_connectivity_matrix.csv"
+from pathlib import Path
+
+CURRENT_DIR = Path(__file__).resolve().parent
+
+PROJECT_ROOT = CURRENT_DIR.parent.parent 
+
+LINK_FAILURE_MATRIX_PATH = str(PROJECT_ROOT / "link_failure" / "link_connectivity_matrix.csv")
 
 polar_threshold = dec2ra(66.5)
 
@@ -47,9 +61,39 @@ def genenrate_config(cli:EmulatorOperator,node_index:int,instance_id:str):
 if __name__ == "__main__":
 
     instance_config_updated:dict[str,str] = {}
-    
+
     cli = EmulatorOperator(ADDR,PORT)
 
+    # traffic_config = load_traffic_config(TRAFFIC_CONFIG_PATH)
+    # traffic_manager = TrafficManager(cli, traffic_config)
+    # link_failure_manager = LinkFailureManager(LINK_FAILURE_MATRIX_PATH)
+    # _advance_wall_start = time.time()
+    # _advance_count = 0
+    # if traffic_config.enabled:
+    #     logger.info(
+    #         "流量管理已启用，共 {} 条流，{} 秒后开始发送，日志目录: {}",
+    #         len(traffic_config.flows),
+    #         traffic_config.startup_delay_seconds,
+    #         traffic_config.log_dir,
+    #     )
+
+    traffic_config = load_traffic_config(TRAFFIC_CONFIG_PATH)
+    traffic_manager = TrafficManager(cli, traffic_config)
+    link_failure_manager = LinkFailureManager(LINK_FAILURE_MATRIX_PATH)
+    _advance_wall_start = time.time()
+    _advance_count = 0
+    prev_failure_down: set[frozenset[str]] = set()
+    inst_pair_to_link: dict[frozenset[str], str] = {}
+    pending_down_no_lid: set[frozenset[str]] = set()
+    if traffic_config.enabled:
+        total_flows = len(traffic_config.flows) + len(traffic_config.auto_flows.pairs)
+        logger.info(
+            "流量管理已启用，共 {} 条流（其中 auto_flows {} 条），{} 秒后开始发送，日志目录: {}",
+            total_flows,
+            len(traffic_config.auto_flows.pairs),
+            traffic_config.startup_delay_seconds,
+            traffic_config.log_dir,
+        )
     # Create Emulator Operator
     while True:
         node_list = cli.get_node_map()
@@ -67,6 +111,11 @@ if __name__ == "__main__":
                     gs_position.longitude = float(instance.extra[EX_LONGITUDE_KEY]) / 180 * math.pi
                     gs_position.altitude = float(instance.extra[EX_ALTITUDE_KEY])
                     cli.put_position(instance_id,gs_position)
+        # # instance_id (UUID) → 故障矩阵中使用的名字 (卫星取 TLE_0，其余保持 UUID)
+        # matrix_name_map: dict[str, str] = {
+        #     iid: (inst.extra.get(EX_TLE0_KEY, iid) if inst.type == TYPE_SATELLITE else iid)
+        #     for iid, inst in all_instance_map.items()
+        # }
 
         address_map = {}
         for node_index,node in node_list.items():
@@ -90,7 +139,7 @@ if __name__ == "__main__":
                 
 
         position_map: dict[str,Position] = {"":Position()}
-        time_now = datetime.now()
+        time_now = datetime.now() #- timedelta(days=423)
         for instance_id,instance_info in all_instance_map.items():
             if instance_info.start:
                 new_postion = calculate_postion(instance_info,time_now)
@@ -125,11 +174,12 @@ if __name__ == "__main__":
                         ground_station.connections[key].end_node_index,
                         ground_station.connections[key].instance_id
                     )
-                    logger.info("Switch %s from %s to %s"%(
+                    logger.info(
+                        "Switch {} from {} to {}",
                         ground_station.instance_id,
                         ground_station.connections[old_link_id].instance_id,
-                        satellite_id
-                    ))
+                        satellite_id,
+                    )
                     old_sat_config = genenrate_config(cli,ground_station.connections[old_link_id].end_node_index,ground_station.connections[old_link_id].instance_id)
                     cli.put_instance_config(ground_station.connections[old_link_id].end_node_index,ground_station.connections[old_link_id].instance_id,json.dumps(old_sat_config))
 
@@ -142,11 +192,12 @@ if __name__ == "__main__":
                     subnet = alloc_ipv4(30)
                     address1 = {LINK_V4_ADDR_KEY:format_ipv4(subnet[1],30)}
                     address2 = {LINK_V4_ADDR_KEY:format_ipv4(subnet[2],30)}
-                    logger.info("Switch %s from %s to %s"%(
+                    logger.info(
+                        "Switch {} from {} to {}",
                         ground_station.instance_id,
                         "None",
-                        satellite_id
-                    ))
+                        satellite_id,
+                    )
                 cli.enable_link_between(
                     ground_station.node_index,
                     ground_station.instance_id,
@@ -168,6 +219,14 @@ if __name__ == "__main__":
             for link_id,link_info in link_map.items():
                 if link_info.parameter is None:
                     link_info.parameter = {}
+                # inst_a = link_info.end_infos[0].instance_id
+                # inst_b = link_info.end_infos[1].instance_id
+                # name_a = matrix_name_map.get(inst_a, inst_a)
+                # name_b = matrix_name_map.get(inst_b, inst_b)
+                # if name_a and name_b:
+                #     inst_pair_to_link[frozenset((name_a, name_b))] = link_id
+                # if inst_a == "" or inst_b == "":
+                #     continue
                 if link_info.end_infos[0].instance_id=="" or link_info.end_infos[1].instance_id == "":
                     continue
                 if not link_info.enable:
@@ -186,6 +245,13 @@ if __name__ == "__main__":
                     #         logger.info("disconnect %s"%link_id)
                     link_info.parameter[PARAMETER_KEY_CONNECT] = 1
 
+                if link_info.parameter[PARAMETER_KEY_CONNECT] == 1 and \
+                    not link_failure_manager.is_link_up(
+                        link_info.end_infos[0].instance_id,
+                        link_info.end_infos[1].instance_id,
+                    ):
+                    link_info.parameter[PARAMETER_KEY_CONNECT] = 0
+
                 if link_info.end_infos[0].instance_type == "" :
                     continue
 
@@ -195,13 +261,56 @@ if __name__ == "__main__":
                 )
                 delay = int(get_propagation_delay_s(distance)*1000000)
                 link_info.parameter[PARAMETER_KEY_DELAY] = delay
-                link_info.parameter[PARAMETER_KEY_BANDWIDTH] = 1000000
-                link_info.parameter[PARAMETER_KEY_LOSS] = 150
+                link_info.parameter[PARAMETER_KEY_BANDWIDTH] = 2000000
+                link_info.parameter[PARAMETER_KEY_LOSS] = 0
                 cli.put_link_parameter(link_info.node_index,link_info.link_id,link_info.parameter)
-                
+
+        # if link_failure_manager.enabled:
+        #     current_failure_down = link_failure_manager.get_current_interruptions()
+        #     newly_down = current_failure_down - prev_failure_down
+        #     newly_recovered = prev_failure_down - current_failure_down
+        #     # 补打上轮因 link_id 未知而暂存的中断记录
+        #     still_pending = set()
+        #     for key in sorted(pending_down_no_lid, key=lambda k: sorted(k)):
+        #         lid = inst_pair_to_link.get(key)
+        #         if lid is not None:
+        #             a, b = sorted(key)
+        #             logger.warning("[link-failure] 链路中断: {} <-> {} (link_id={})", a, b, lid)
+        #         else:
+        #             still_pending.add(key)
+        #     pending_down_no_lid.clear()
+        #     pending_down_no_lid.update(still_pending)
+        #     for key in sorted(newly_down, key=lambda k: sorted(k)):
+        #         a, b = sorted(key)
+        #         lid = inst_pair_to_link.get(key)
+        #         if lid is not None:
+        #             logger.warning("[link-failure] 链路中断: {} <-> {} (link_id={})", a, b, lid)
+        #         else:
+        #             pending_down_no_lid.add(key)
+        #             logger.warning("[link-failure] 链路中断: {} <-> {} (link_id 暂未知，下轮补打)", a, b)
+        #     for key in sorted(newly_recovered, key=lambda k: sorted(k)):
+        #         a, b = sorted(key)
+        #         lid = inst_pair_to_link.get(key, "?")
+        #         logger.info("[link-failure] 链路恢复: {} <-> {} (link_id={})", a, b, lid)
+        #         pending_down_no_lid.discard(key)
+        #     prev_failure_down = current_failure_down
+
         for instance_id,instance_info in all_instance_map.items():
             if not instance_info.start:
                 continue
             config_map = genenrate_config(cli,instance_info.node_index,instance_id)
             cli.put_instance_config_if_not_exist(instance_info.node_index,instance_id,json.dumps(config_map))
+
+        traffic_manager.update(all_instance_map, node_link_map)
+        link_failure_manager.advance()
+
+        _now = time.time()
+        _target = int((_now - _advance_wall_start) / step_second)
+        _catchup = _target - _advance_count
+        if _catchup > 1:
+            logger.debug("[link-failure] 循环耗时较长，补偿推进 {} 步 (step={}→{})",
+                         _catchup, _advance_count, _target)
+        for _ in range(max(0, _catchup)):
+            link_failure_manager.advance()
+        _advance_count = max(_advance_count, _target)
         sleep(step_second)

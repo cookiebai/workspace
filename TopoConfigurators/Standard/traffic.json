@@ -1,0 +1,42 @@
+{
+  "enabled": true,
+  "startup_delay_seconds": 10,
+  "log_dir": "/share/user/iperf_logs",
+  "auto_flows": {
+    "pairs": [
+      {"sender": 0,  "receiver": 5,  "bandwidth": "120M"},
+      {"sender": 1,  "receiver": 6,  "bandwidth": "120M"},
+      {"sender": 2,  "receiver": 7,  "bandwidth": "120M"},
+      {"sender": 3,  "receiver": 8,  "bandwidth": "120M"},
+      {"sender": 4,  "receiver": 9,  "bandwidth": "120M"},
+      {"sender": 5,  "receiver": 10, "bandwidth": "120M"},
+
+      {"sender": 11, "receiver": 16, "bandwidth": "120M"},
+      {"sender": 12, "receiver": 17, "bandwidth": "120M"},
+      {"sender": 13, "receiver": 18, "bandwidth": "120M"},
+      {"sender": 14, "receiver": 19, "bandwidth": "120M"},
+      {"sender": 15, "receiver": 20, "bandwidth": "120M"},
+      {"sender": 16, "receiver": 21, "bandwidth": "120M"},
+
+      {"sender": 5,  "receiver": 0,  "bandwidth": "60M"},
+      {"sender": 6,  "receiver": 1,  "bandwidth": "60M"},
+      {"sender": 7,  "receiver": 2,  "bandwidth": "60M"},
+      {"sender": 8,  "receiver": 3,  "bandwidth": "60M"},
+      {"sender": 9,  "receiver": 4,  "bandwidth": "60M"},
+      {"sender": 10, "receiver": 5,  "bandwidth": "60M"},
+
+      {"sender": 16, "receiver": 11, "bandwidth": "60M"},
+      {"sender": 17, "receiver": 12, "bandwidth": "60M"},
+      {"sender": 18, "receiver": 13, "bandwidth": "60M"},
+      {"sender": 19, "receiver": 14, "bandwidth": "60M"},
+      {"sender": 20, "receiver": 15, "bandwidth": "60M"},
+      {"sender": 21, "receiver": 16, "bandwidth": "60M"}
+    ],
+    "protocol": "udp",
+    "duration": 180,
+    "parallel": 1,
+    "port_start": 5201,
+    "interval": 2.0,
+    "omit": 0
+  }
+}
