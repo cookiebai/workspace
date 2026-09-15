@@ -1,0 +1,11 @@
+{
+  "default_rate_bps": 50000000,
+  "default_priority": 1.0,
+  "ground_station_pairs": [
+    {"src_index": 0, "dst_index": 5, "rate_bps": 90000000, "priority": 2.0, "bidirectional": true},
+    {"src_index": 2, "dst_index": 7, "rate_bps": 85000000, "priority": 1.8, "bidirectional": true},
+    {"src_index": 3, "dst_index": 9, "rate_bps": 75000000, "priority": 1.4, "bidirectional": false},
+    {"src_index": 4, "dst_index": 10, "rate_bps": 80000000, "priority": 1.6, "bidirectional": true},
+    {"src_index": 6, "dst_index": 11, "rate_bps": 70000000, "priority": 1.3, "bidirectional": true}
+  ]
+}

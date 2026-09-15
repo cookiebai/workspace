@@ -36,7 +36,7 @@ func CreateContainer(instance *model.Instance) error {
 
 		hostConfig := &container.HostConfig{
 			Privileged:  true,
-			NetworkMode: "none",
+			NetworkMode: "bridge",
 			Binds: []string{
 				fmt.Sprintf("%s:%s", dir.MountShareData, "/share"),
 			},
@@ -88,9 +88,12 @@ func StartContainer(instance *model.Instance) (int, error) {
 		if err != nil {
 			return err
 		}
+		if info.State.Pid == 0 {
+			return fmt.Errorf("container %s pid not ready", containerID)
+		}
 		pid = info.State.Pid
 		return nil
-	}, 4)
+	}, 10)
 
 	if err != nil {
 		return pid, fmt.Errorf("get pid of container %s error: %s", containerID, err.Error())
@@ -171,7 +174,9 @@ func UpdateInstanceState(oldInstance, newInstance *model.Instance) error {
 		if shouldRunning {
 			var pid int
 			pid, err = StartContainer(newInstance)
-			data.SetInstancePid(newInstance.InstanceID, pid)
+			if err == nil {
+				data.SetInstancePid(newInstance.InstanceID, pid)
+			}
 		} else if shouldCreate {
 			err = StopContainer(oldInstance)
 			data.DeleteInstancePid(oldInstance.InstanceID)

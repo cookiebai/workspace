@@ -6,7 +6,7 @@
     "enable_code_server": true,
     "interface_name": "enp4s3",
     "debug": false,
-    "instance_capacity": 1800,
+    "instance_capacity": 100,
     "monitor_interval": 1,
     "parallel_num": 16
   },

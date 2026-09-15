@@ -60,7 +60,7 @@ func GetLinkList(nodeIndex int) ([]model.Link, error) {
 		linkInfo, err := link.ParseLinkFromBytes(v.Value)
 		if err != nil {
 			errMsg := fmt.Sprintf("Unable to parse link info from etcd value %s, Error:%s", string(v.Value), err.Error())
-			logrus.Errorf(errMsg)
+			logrus.Error(errMsg)
 			continue
 		}
 		linkList = append(linkList, linkInfo)

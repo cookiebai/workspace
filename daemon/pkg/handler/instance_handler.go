@@ -4,11 +4,16 @@ import (
 	"NodeDaemon/model"
 	"NodeDaemon/model/ginmodel"
 	"NodeDaemon/pkg/synchronizer"
+	"NodeDaemon/utils"
+	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -237,6 +242,91 @@ func StartInstanceHander(ctx *gin.Context) {
 		Message: "Success",
 	}
 	ctx.JSON(http.StatusOK, jsonResp)
+}
+
+func ExecInstanceHandler(ctx *gin.Context) {
+	var req ginmodel.ExecInstanceRequest
+	if err := ctx.BindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Invalid Request Data: %s", err.Error()),
+		})
+		return
+	}
+
+	instance, err := synchronizer.GetInstanceInfo(req.NodeIndex, req.InstanceID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Get Instance Info Error: %s", err.Error()),
+		})
+		return
+	}
+
+	containerID := fmt.Sprintf("%s_%s", instance.Type, instance.InstanceID)
+	cmd := append([]string{req.Command}, req.Args...)
+
+	execResp, err := utils.DockerClient.ContainerExecCreate(context.Background(), containerID, types.ExecConfig{
+		Cmd:          cmd,
+		AttachStdout: !req.Detach,
+		AttachStderr: !req.Detach,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Exec Create Error: %s", err.Error()),
+		})
+		return
+	}
+
+	if req.Detach {
+		if err := utils.DockerClient.ContainerExecStart(context.Background(), execResp.ID, types.ExecStartCheck{Detach: true}); err != nil {
+			ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+				Code:    -1,
+				Message: fmt.Sprintf("Exec Start Error: %s", err.Error()),
+			})
+			return
+		}
+		ctx.JSON(http.StatusOK, ginmodel.JsonResp{Code: 0, Message: "Success", Data: map[string]interface{}{"exit_code": 0}})
+		return
+	}
+
+	hijack, err := utils.DockerClient.ContainerExecAttach(context.Background(), execResp.ID, types.ExecStartCheck{})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Exec Attach Error: %s", err.Error()),
+		})
+		return
+	}
+	defer hijack.Close()
+
+	var outBuf, errBuf bytes.Buffer
+	if _, err := stdcopy.StdCopy(&outBuf, &errBuf, hijack.Reader); err != nil {
+		ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Read Output Error: %s", err.Error()),
+		})
+		return
+	}
+
+	inspect, err := utils.DockerClient.ContainerExecInspect(context.Background(), execResp.ID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, ginmodel.JsonResp{
+			Code:    -1,
+			Message: fmt.Sprintf("Exec Inspect Error: %s", err.Error()),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, ginmodel.JsonResp{
+		Code:    0,
+		Message: "Success",
+		Data: map[string]interface{}{
+			"exit_code": inspect.ExitCode,
+			"output":    outBuf.String(),
+		},
+	})
 }
 
 func StopInstanceHandler(ctx *gin.Context) {

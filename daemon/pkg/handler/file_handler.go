@@ -21,7 +21,7 @@ func PreviewFileHandler(ctx *gin.Context) {
 	var previewText string
 	if err != nil {
 		errMsg := fmt.Sprintf("Check File Type Error: %s", err.Error())
-		logrus.Errorf(errMsg)
+		logrus.Error(errMsg)
 		resp := ginmodel.JsonResp{
 			Code:    -1,
 			Message: errMsg,
@@ -39,7 +39,7 @@ func PreviewFileHandler(ctx *gin.Context) {
 		f, err := os.Open(previewPath)
 		if err != nil {
 			errMsg := fmt.Sprintf("Open File %s Error: %s", previewPath, err.Error())
-			logrus.Errorf(errMsg)
+			logrus.Error(errMsg)
 			resp := ginmodel.JsonResp{
 				Code:    -1,
 				Message: errMsg,
@@ -52,7 +52,7 @@ func PreviewFileHandler(ctx *gin.Context) {
 		buf, err := io.ReadAll(f)
 		if err != nil {
 			errMsg := fmt.Sprintf("Read File %s Error: %s", previewPath, err.Error())
-			logrus.Errorf(errMsg)
+			logrus.Error(errMsg)
 			resp := ginmodel.JsonResp{
 				Code:    -1,
 				Message: errMsg,
@@ -80,7 +80,7 @@ func GetFileListHandler(ctx *gin.Context) {
 	files, err := os.ReadDir(listPath)
 	if err != nil {
 		errMsg := fmt.Sprintf("Read Dir %s Error: %s", listPath, err.Error())
-		logrus.Errorf(errMsg)
+		logrus.Error(errMsg)
 		resp := ginmodel.JsonResp{
 			Code:    -1,
 			Message: errMsg,
@@ -152,7 +152,7 @@ func DeleteFileHandler(ctx *gin.Context) {
 	err := os.RemoveAll(removePath)
 	if err != nil {
 		errMsg := fmt.Sprintf("Remove %s Error: %s", removePath, err.Error())
-		logrus.Errorf(errMsg)
+		logrus.Error(errMsg)
 		resp := ginmodel.JsonResp{
 			Code:    -1,
 			Message: errMsg,

@@ -52,6 +52,7 @@ func RegisterHandlers(r *gin.Engine) {
 	instance.GET("/:node_index/:instance_id", handler.GetInstanceInfoHandler)
 	instance.POST("/start", handler.StartInstanceHander)
 	instance.POST("/stop", handler.StopInstanceHandler)
+	instance.POST("/exec", handler.ExecInstanceHandler)
 	instance.POST("/:instance_id", handler.AddInstanceHandler)
 	instance.DELETE("/:instance_id", handler.DelInstanceHandler)
 

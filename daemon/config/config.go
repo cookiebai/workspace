@@ -141,7 +141,7 @@ func InitConfigMasterMode() error {
 	GlobalConfig.Dependency.EtcdAddr = GetConfigEnvString("ETCD_ADDR", GlobalConfig.Dependency.EtcdAddr)
 	GlobalConfig.Dependency.EtcdPort = GetConfigEnvNumber("ETCD_PORT", GlobalConfig.Dependency.EtcdPort)
 	GlobalConfig.Dependency.InfluxdbAddr = GetConfigEnvString("INFLUXDB_ADDR", GlobalConfig.Dependency.InfluxdbAddr)
-	GlobalConfig.Dependency.InfluxdbPort = GetConfigEnvNumber("ETCD_PORT", GlobalConfig.Dependency.InfluxdbPort)
+	GlobalConfig.Dependency.InfluxdbPort = GetConfigEnvNumber("INFLUXDB_PORT", GlobalConfig.Dependency.InfluxdbPort)
 	GlobalConfig.Dependency.InfluxdbToken = GetConfigEnvString("INFLUXDB_TOKEN", GlobalConfig.Dependency.InfluxdbToken)
 	GlobalConfig.Dependency.InfluxdbOrg = GetConfigEnvString("INFLUXDB_ORG", GlobalConfig.Dependency.InfluxdbOrg)
 	GlobalConfig.Dependency.InfluxdbBucket = GetConfigEnvString("INFLUXDB_BUCKET", GlobalConfig.Dependency.InfluxdbBucket)

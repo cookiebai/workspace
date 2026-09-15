@@ -466,7 +466,7 @@ func ResetStatusHandler(ctx *gin.Context) {
 	nodes, err := synchronizer.GetNodeList()
 	if err != nil {
 		errMsg := fmt.Sprintf("Get Node List Error: %s", err.Error())
-		logrus.Errorf(errMsg)
+		logrus.Error(errMsg)
 		resp := ginmodel.JsonResp{
 			Code:    -1,
 			Message: errMsg,
@@ -478,25 +478,25 @@ func ResetStatusHandler(ctx *gin.Context) {
 		links, err := synchronizer.GetLinkList(node.NodeIndex)
 		if err != nil {
 			errMsg := fmt.Sprintf("Get Link List of Node %d Error: %s", node.NodeIndex, err.Error())
-			logrus.Errorf(errMsg)
+			logrus.Error(errMsg)
 		}
 		for _, linkInfo := range links {
 			err := synchronizer.RemoveLink(node.NodeIndex, linkInfo.GetLinkID())
 			if err != nil {
 				errMsg := fmt.Sprintf("Remove Link %s of Node %d Error: %s", linkInfo.GetLinkID(), node.NodeIndex, err.Error())
-				logrus.Errorf(errMsg)
+				logrus.Error(errMsg)
 			}
 		}
 		instances, err := synchronizer.GetInstanceList(node.NodeIndex)
 		if err != nil {
 			errMsg := fmt.Sprintf("Get Instance List of Node %d Error: %s", node.NodeIndex, err.Error())
-			logrus.Errorf(errMsg)
+			logrus.Error(errMsg)
 		}
 		for _, instanceInfo := range instances {
 			err := synchronizer.RemoveInstance(node.NodeIndex, instanceInfo.InstanceID)
 			if err != nil {
 				errMsg := fmt.Sprintf("Remove Instance %s of Node %d Error: %s", instanceInfo.InstanceID, node.NodeIndex, err.Error())
-				logrus.Errorf(errMsg)
+				logrus.Error(errMsg)
 			}
 		}
 		synchronizer.UpdateNode(node.NodeIndex, func(n *model.Node) error {

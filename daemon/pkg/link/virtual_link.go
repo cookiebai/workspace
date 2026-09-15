@@ -362,8 +362,9 @@ func (l *VethLink) SetParameters(oldPara, newPara map[string]int64) error {
 				}
 				dev, err := netlink.LinkByName(fmt.Sprintf("%s-%d", l.GetLinkID(), i))
 				if err != nil {
-					logrus.Errorf("Update netem qdisc error: get link by name %s error: %s", fmt.Sprintf("%s-%d", l.GetLinkID(), i), err.Error())
-					return err
+					// 网卡已不存在时仅告警并跳过，避免反复报错阻断后续处理
+					logrus.Debugf("Update netem qdisc skip: get link by name %s error: %s", fmt.Sprintf("%s-%d", l.GetLinkID(), i), err.Error())
+					continue
 				}
 				netemInfo := netlink.NewNetem(
 					NetemQdiscTemplate.QdiscAttrs,
@@ -387,8 +388,8 @@ func (l *VethLink) SetParameters(oldPara, newPara map[string]int64) error {
 				}
 				dev, err := netlink.LinkByName(fmt.Sprintf("%s-%d", l.GetLinkID(), i))
 				if err != nil {
-					logrus.Errorf("Update tbf qdisc error: get link by name %s error: %s", fmt.Sprintf("%s-%d", l.GetLinkID(), i), err.Error())
-					return err
+					logrus.Debugf("Update tbf qdisc skip: get link by name %s error: %s", fmt.Sprintf("%s-%d", l.GetLinkID(), i), err.Error())
+					continue
 				}
 				tbfInfo := TbfQdiscTemplate
 				tbfInfo.LinkIndex = dev.Attrs().Index

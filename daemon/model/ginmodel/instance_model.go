@@ -28,6 +28,14 @@ type AddInstanceRequest struct {
 	DeviceInfo map[string]model.DeviceRequireInfo `json:"device_need"`
 }
 
+type ExecInstanceRequest struct {
+	NodeIndex  int      `json:"node_index"`
+	InstanceID string   `json:"instance_id"`
+	Command    string   `json:"command"`
+	Args       []string `json:"args"`
+	Detach     bool     `json:"detach"`
+}
+
 type InstanceInfo struct {
 	InstanceID    string                          `json:"instance_id"`
 	Name          string                          `json:"name"`

@@ -35,7 +35,7 @@ class EmulatorOperator:
         if response.status_code != 200 :
             raise RuntimeError("get etcd address info error, resp code is %d"%response.status_code)
         etcd_info = json.loads(response.content)
-        self.etcd_client = etcd3.client(host=etcd_info["data"]["address"],port=etcd_info["data"]["port"])
+        self.etcd_client = etcd3.client(host=etcd_info["data"]["address"],port=etcd_info["data"]["port"], timeout=30)
         self.__pool = ThreadPoolExecutor(max_workers=async_pool_size)
 
 

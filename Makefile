@@ -25,3 +25,11 @@ clean:
 	cd container-base && make clean
 	cd dependencies && make clean
 	cd daemon && make clean
+
+.PHONY: node-daemon sync-config
+node-daemon:
+	@echo "Building NodeDaemon from daemon/go.mod"
+	GO111MODULE=on go -C daemon build -o ../NodeDaemon .
+
+sync-config:
+	./scripts/sync_config.sh

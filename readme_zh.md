@@ -74,6 +74,17 @@ OpenSN
 └── ui # Web界面代码子目录
 ```
 
+如果仅需从源码构建 `NodeDaemon`，可以直接在仓库根目录执行以下命令（需 Go 1.20 及以上版本支持 `go -C` 参数）
+```bash
+make node-daemon
+```
+命令会自动切换到 `daemon` 目录并在仓库根目录生成 `NodeDaemon` 可执行文件，便于后续拷贝到目标部署路径。请务必先 `cd OpenSN-Library/` 再执行该目标。
+
+二进制生成后，可执行以下命令将 `daemon/config/config.json` 同步到 `config/config.json`，保证 `NodeDaemon` 在仓库根目录即可读取配置：
+```bash
+make sync-config
+```
+
 ## 4. 启动OpenSN
 
 ### 4.1 启动前内核配置

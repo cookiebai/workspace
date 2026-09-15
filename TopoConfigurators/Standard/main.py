@@ -18,6 +18,8 @@ from traffic_manager import TrafficManager
 from link_failure_manager import LinkFailureManager
 from loguru import logger
 import json, math
+import os
+import redis
 step_second = 1
 TRAFFIC_CONFIG_PATH = "traffic.json"
 # LINK_FAILURE_MATRIX_PATH = "../../link_failure/link_connectivity_matrix.csv"
@@ -80,6 +82,23 @@ if __name__ == "__main__":
     traffic_config = load_traffic_config(TRAFFIC_CONFIG_PATH)
     traffic_manager = TrafficManager(cli, traffic_config)
     link_failure_manager = LinkFailureManager(LINK_FAILURE_MATRIX_PATH)
+    fixed_time_text = os.getenv("OPENSN_FIXED_TIME")
+    fixed_time = datetime.fromisoformat(fixed_time_text) if fixed_time_text else None
+    if fixed_time is not None:
+        logger.info(
+            "固定实验快照：geometry_time={}，故障矩阵保持初始时间步；默认动态模式不变。",
+            fixed_time.isoformat(),
+        )
+    try:
+        redis.Redis(host="127.0.0.1", port=6379, decode_responses=True).hset(
+            "te:experiment:scenario",
+            mapping={
+                "geometry_time": fixed_time.isoformat() if fixed_time else "dynamic",
+                "failure_step": "0" if fixed_time else "dynamic",
+            },
+        )
+    except redis.RedisError as exc:
+        logger.warning("无法发布实验场景信息: {}", exc)
     _advance_wall_start = time.time()
     _advance_count = 0
     prev_failure_down: set[frozenset[str]] = set()
@@ -139,7 +158,7 @@ if __name__ == "__main__":
                 
 
         position_map: dict[str,Position] = {"":Position()}
-        time_now = datetime.now() #- timedelta(days=423)
+        time_now = fixed_time if fixed_time is not None else datetime.now()
         for instance_id,instance_info in all_instance_map.items():
             if instance_info.start:
                 new_postion = calculate_postion(instance_info,time_now)
@@ -302,15 +321,16 @@ if __name__ == "__main__":
             cli.put_instance_config_if_not_exist(instance_info.node_index,instance_id,json.dumps(config_map))
 
         traffic_manager.update(all_instance_map, node_link_map)
-        link_failure_manager.advance()
-
-        _now = time.time()
-        _target = int((_now - _advance_wall_start) / step_second)
-        _catchup = _target - _advance_count
-        if _catchup > 1:
-            logger.debug("[link-failure] 循环耗时较长，补偿推进 {} 步 (step={}→{})",
-                         _catchup, _advance_count, _target)
-        for _ in range(max(0, _catchup)):
+        if fixed_time is None:
             link_failure_manager.advance()
-        _advance_count = max(_advance_count, _target)
+
+            _now = time.time()
+            _target = int((_now - _advance_wall_start) / step_second)
+            _catchup = _target - _advance_count
+            if _catchup > 1:
+                logger.debug("[link-failure] 循环耗时较长，补偿推进 {} 步 (step={}→{})",
+                             _catchup, _advance_count, _target)
+            for _ in range(max(0, _catchup)):
+                link_failure_manager.advance()
+            _advance_count = max(_advance_count, _target)
         sleep(step_second)

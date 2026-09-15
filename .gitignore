@@ -15,13 +15,20 @@ configuration
 #[Build Mid-Files]
 **/cmake-build-debug
 **/__pycache__
+*.py[cod]
 
 #[Binary Files]
 *.mp4
 .DS_Store
 *.zip
 *.tar.gz
+*.tar
+*.log
+nohup.out
 node-daemon/NodeDaemon
+/NodeDaemon
+/runtime/
+/opensn_build/
 
 #[Build Target]
 daemon/build

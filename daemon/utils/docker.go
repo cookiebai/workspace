@@ -11,7 +11,10 @@ var DockerClient *dockerClient.Client
 
 func InitDockerClient(sockPath string) error{
 	url := fmt.Sprintf("unix://%s",sockPath)
-	cli, err := dockerClient.NewClientWithOpts(dockerClient.WithHost(url))
+	cli, err := dockerClient.NewClientWithOpts(
+		dockerClient.WithHost(url),
+		dockerClient.WithAPIVersionNegotiation(),
+	)
 	
 	if err != nil {
 		logrus.Error("Init Docker Client Error:", err.Error())

@@ -6,7 +6,6 @@ USER root
 COPY TopoConfigurator /workspace
 RUN chmod -R 777 /workspace
 
-ENV SUDO_PASSWORD=opensn
 ENV TZ=Asia/Shanghai
 ENV PGID=1000
 ENV PUID=1000

@@ -13,6 +13,9 @@ from instance_types import EX_ORBIT_INDEX, EX_SATELLITE_INDEX, EX_TLE0_KEY, TYPE
 # Redis te:demands key
 _TE_DEMANDS_KEY = "te:demands"
 _POLICY_APPLIED_KEY = "te:policy:applied_signature"
+_FLOW_DST_IP_KEY = "te:flow:dst_ip"
+_TRAFFIC_RESTART_EPOCH_KEY = "te:traffic:restart_epoch"
+_EXTERNAL_TRAFFIC_CONTROL_KEY = "te:traffic:external_control"
 # 流量类别：根据带宽决定，>=500K 为背景流，<500K 为控制流
 _BW_THRESHOLD_K = 500
 
@@ -37,6 +40,7 @@ class TrafficManager:
         self._auto_flows_resolved: bool = False
         self._client_started_once: set[str] = set()
         self._last_applied_policy: dict[str, str] = {}
+        self._restart_epoch: str | None = None
         # Redis 客户端，用于写入 te:demands 让 Lyapunov 引擎感知流量需求
         try:
             self._redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -238,6 +242,7 @@ class TrafficManager:
     def update(self, all_instance_map: dict[str, Instance], node_link_map: dict[int, dict]) -> None:
         if not self.config.enabled: return
         if not self._auto_flows_resolved: self._resolve_auto_flows(all_instance_map)
+        self._refresh_restart_epoch()
 
         elapsed = time.time() - self._start_time
         if elapsed < self.config.startup_delay_seconds:
@@ -250,6 +255,8 @@ class TrafficManager:
         self._tick += 1
         # 持续写入 te:demands，让 Lyapunov 持续感知流量需求
         self._write_current_flows_to_redis()
+        if self._external_traffic_control_enabled():
+            return
 
         do_liveness = (self._tick % _LIVENESS_CHECK_INTERVAL == 0)
         for flow in self.config.flows:
@@ -280,9 +287,17 @@ class TrafficManager:
         self._ensure_log_dir(receiver)
         self._ensure_log_dir(sender)
 
-        # 检查服务端存活
-        if flow.flow_id not in self._server_started or (do_liveness and not self._is_process_alive(receiver, f"[i]perf3 -s -p {flow.port}")):
-            if not self._start_server(flow, receiver): return
+        # Reuse an already-listening server after Standard restarts. Restarting
+        # all 24 servers serially makes phase synchronization unnecessarily slow.
+        server_pattern = f"[i]perf3 -s -p {flow.port}"
+        if flow.flow_id not in self._server_started:
+            if self._is_process_alive(receiver, server_pattern):
+                self._server_started.add(flow.flow_id)
+            elif not self._start_server(flow, receiver):
+                return
+        elif do_liveness and not self._is_process_alive(receiver, server_pattern):
+            if not self._start_server(flow, receiver):
+                return
 
         policy_signature = self._read_policy_signature(flow)
         old_signature = self._last_applied_policy.get(flow.flow_id)
@@ -292,9 +307,32 @@ class TrafficManager:
         # 避免 iperf 正常结束后被 TrafficManager 反复重启，导致日志和统计混乱
         if flow.flow_id in self._client_started_once:
             if not policy_changed:
+                if (
+                    policy_signature
+                    and do_liveness
+                    and not self._is_process_alive(sender, f"[i]perf3 -c .*-p {flow.port}")
+                ):
+                    dest_ip = self._cached_or_resolve_dest_ip(
+                        flow,
+                        sender,
+                        receiver,
+                        node_link_map,
+                    )
+                    if dest_ip:
+                        logger.warning(
+                            "[TrafficManager] flow {} 已有 SRv6 策略但 client 不存活，重试启动",
+                            flow.flow_id,
+                        )
+                        self._start_client(flow, sender, dest_ip)
+                        self._last_dest_ip[flow.flow_id] = dest_ip
                 return
 
-            dest_ip = self._resolve_dest_ip(flow, sender, receiver, node_link_map)
+            dest_ip = self._cached_or_resolve_dest_ip(
+                flow,
+                sender,
+                receiver,
+                node_link_map,
+            )
             if not dest_ip:
                 return
 
@@ -315,7 +353,12 @@ class TrafficManager:
                 )
             return
 
-        dest_ip = self._resolve_dest_ip(flow, sender, receiver, node_link_map)
+        dest_ip = self._cached_or_resolve_dest_ip(
+            flow,
+            sender,
+            receiver,
+            node_link_map,
+        )
         if not dest_ip: return
 
         logger.info(
@@ -329,6 +372,78 @@ class TrafficManager:
         self._start_client(flow, sender, dest_ip)
         self._last_dest_ip[flow.flow_id] = dest_ip
         self._client_started_once.add(flow.flow_id)
+        if policy_signature:
+            self._last_applied_policy[flow.flow_id] = policy_signature
+
+    def _refresh_restart_epoch(self) -> None:
+        """Restart all clients when the experiment controller changes phase."""
+        if not self._redis:
+            return
+        try:
+            epoch = self._redis.get(_TRAFFIC_RESTART_EPOCH_KEY) or ""
+        except Exception:
+            return
+        if self._restart_epoch is None:
+            self._restart_epoch = epoch
+            return
+        if epoch == self._restart_epoch:
+            return
+
+        logger.info(
+            "[TrafficManager] experiment restart epoch changed: {} -> {}",
+            self._restart_epoch,
+            epoch,
+        )
+        self._restart_epoch = epoch
+        self._client_started_once.clear()
+        self._last_applied_policy.clear()
+
+    def _external_traffic_control_enabled(self) -> bool:
+        if not self._redis:
+            return False
+        try:
+            value = self._redis.get(_EXTERNAL_TRAFFIC_CONTROL_KEY)
+        except Exception:
+            return False
+        return str(value or "").lower() in ("1", "true", "yes", "on")
+
+    def _cached_or_resolve_dest_ip(
+        self,
+        flow: TrafficFlow,
+        sender: Instance,
+        receiver: Instance,
+        node_link_map: dict[int, dict],
+    ) -> str:
+        cached = self._last_dest_ip.get(flow.flow_id)
+        if cached:
+            return cached
+        if self._redis:
+            try:
+                recorded = self._redis.hget(
+                    _FLOW_DST_IP_KEY,
+                    f"iperf_{flow.flow_id}",
+                )
+            except Exception:
+                recorded = ""
+            if recorded and recorded.startswith("10."):
+                receiver_ips = self._get_instance_10_ips(receiver)
+                if recorded in receiver_ips:
+                    self._last_dest_ip[flow.flow_id] = recorded
+                    return recorded
+                logger.warning(
+                    "[TrafficManager] flow {} 的缓存目标地址 {} 不属于当前 receiver {}，重新解析",
+                    flow.flow_id,
+                    recorded,
+                    receiver.instance_id,
+                )
+                try:
+                    self._redis.hdel(
+                        _FLOW_DST_IP_KEY,
+                        f"iperf_{flow.flow_id}",
+                    )
+                except Exception:
+                    pass
+        return self._resolve_dest_ip(flow, sender, receiver, node_link_map)
 
     def _read_policy_signature(self, flow: TrafficFlow) -> str:
         """读取控制面成功下发的 SRv6 策略签名。"""
@@ -341,6 +456,14 @@ class TrafficManager:
             logger.debug("读取 SRv6 策略生效标记失败: {}", e)
             return ""
         return signature or ""
+
+    def _record_flow_dest_ip(self, flow: TrafficFlow, dest_ip: str) -> None:
+        if not self._redis or not dest_ip:
+            return
+        try:
+            self._redis.hset(_FLOW_DST_IP_KEY, f"iperf_{flow.flow_id}", dest_ip)
+        except Exception as e:
+            logger.debug("写入 flow 目标地址失败: {}", e)
 
     def _ensure_log_dir(self, instance: Instance) -> None:
         if instance.instance_id in self._log_dir_created: return
@@ -396,6 +519,7 @@ class TrafficManager:
     def _start_client(self, flow: TrafficFlow, sender: Instance, dest_ip: str) -> None:
         log_path = self._client_log_path(flow)
         self._truncate_log_once(sender, log_path)
+        self._record_flow_dest_ip(flow, dest_ip)
         args_str = self._build_client_args_str(flow, dest_ip)
         self._kill_client(flow, sender)
         cmd = (f"printf '\\n--- [client restart %s -> {dest_ip}] ---\\n' \"$(date +%H:%M:%S)\" >> {log_path}; "
@@ -411,20 +535,22 @@ class TrafficManager:
 
     @staticmethod
     def _build_client_args_str(flow: TrafficFlow, dest_ip: str) -> str:
-        # 强制增加 -M 1200 确保控制信道 TCP 握手成功（应对 SRv6 头部开销）
-        # 增加 -l 1000 减小 UDP 报文长度，防止数据面分片压力
         parts = [
             "-c", dest_ip, 
             "-p", str(flow.port), 
             "-t", str(flow.duration), 
             "-P", str(flow.parallel), 
-            "-i", str(flow.interval),
-            "-M", "1200"
+            "-i", str(flow.interval)
         ]
         if flow.bandwidth and flow.bandwidth != "0": 
             parts += ["-b", flow.bandwidth]
-        if flow.protocol.lower() == "udp": 
+        if flow.protocol.lower() == "udp":
+            # iperf3 UDP still relies on a TCP control channel. Keep datagrams
+            # below the SRv6-adjusted MTU if UDP is explicitly selected.
             parts += ["-u", "-l", "1000"]
+        else:
+            # TCP is the reproducible default for the TE A/B experiment.
+            parts += ["-M", "1200"]
         if flow.omit > 0: 
             parts += ["-O", str(flow.omit)]
         return " ".join(parts)

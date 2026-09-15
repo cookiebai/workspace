@@ -1,83 +1,126 @@
-import subprocess
-import re
-import time
-import redis
+#!/usr/bin/env python3
 import logging
+import os
+import re
+import subprocess
+import time
+from collections import defaultdict
 
-# 使用 INFO 级别，避免日志刷屏，但保留核心状态可见
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+import redis
 
-try:
-    r = redis.Redis(host='127.0.0.1', port=6379, decode_responses=True, socket_timeout=2.0)
-    r.ping()
-    logging.info("Redis 连通性测试: 成功！")
-except Exception as e:
-    logging.error(f"Redis 连接失败: {e}")
-    exit(1)
 
-def get_containers():
-    """获取所有正在运行的 Docker 容器名称"""
-    try:
-        output = subprocess.check_output(['docker', 'ps', '--format', '{{.Names}}'], text=True)
-        # 只提取有意义的容器名，排除空行
-        return [name.strip() for name in output.split('\n') if name.strip()]
-    except Exception as e:
-        logging.error(f"无法获取 Docker 容器列表: {e}")
-        return []
+POLL_INTERVAL_SECONDS = float(os.getenv("QUEUE_MONITOR_INTERVAL_SECONDS", "1"))
+DROP_PENALTY_BYTES = int(os.getenv("QUEUE_DROP_PENALTY_BYTES", "1500"))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+r = redis.Redis(
+    host=os.getenv("TE_REDIS_HOST", "127.0.0.1"),
+    port=int(os.getenv("TE_REDIS_PORT", "6379")),
+    decode_responses=True,
+    socket_timeout=3.0,
+)
+
+_last_dropped = {}
+
+
+def read_host_qdiscs():
+    """Read real OpenSN netem/TBF queues from the host, not noqueue in containers."""
+    result = subprocess.run(
+        ["tc", "-s", "qdisc", "show"],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "tc qdisc failed")
+
+    stats = defaultdict(lambda: {"backlog": 0, "dropped": 0})
+    current_iface = None
+    for line in result.stdout.splitlines():
+        qdisc_match = re.search(r"^qdisc\s+\S+\s+\S+:\s+dev\s+(\S+)", line)
+        if qdisc_match:
+            current_iface = qdisc_match.group(1)
+            continue
+        if not current_iface:
+            continue
+
+        backlog_match = re.search(r"\bbacklog\s+(\d+)[bB]\b", line)
+        if backlog_match:
+            stats[current_iface]["backlog"] = max(
+                stats[current_iface]["backlog"],
+                int(backlog_match.group(1)),
+            )
+
+        dropped_match = re.search(r"\bdropped\s+(\d+)\b", line)
+        if dropped_match:
+            stats[current_iface]["dropped"] = max(
+                stats[current_iface]["dropped"],
+                int(dropped_match.group(1)),
+            )
+    return stats
+
 
 def collect_queues():
-    containers = get_containers()
-    active_nodes = 0
-    
-    for container in containers:
-        redis_key = f"telemetry:queue:{container}"
-        try:
-            # 核心魔法：从宿主机向容器内部发射 tc 命令
-            cmd = ["docker", "exec", container, "tc", "-s", "qdisc", "show"]
-            # 加上 1秒超时，绝对不会再卡死
-            output = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT, timeout=1.0)
-            current_queues = {}
-            
-            # 按 qdisc 块分割输出，因为一个节点有多个网卡
-            blocks = output.split('qdisc ')
-            for block in blocks:
-                if 'dev ' in block and 'backlog ' in block:
-                    # 正则提取真实的容器内网卡名 (例如 eth1)
-                    iface_match = re.search(r'dev\s+(\S+)', block)
-                    # 正则提取字节数
-                    backlog_match = re.search(r'backlog\s+(\d+)[bB]', block)
-                    
-                    if iface_match and backlog_match:
-                        iface = iface_match.group(1)
-                        if iface == 'lo': continue # 忽略本地回环
-                        
-                        backlog = int(backlog_match.group(1))
+    qdisc_stats = read_host_qdiscs()
+    telemetry = defaultdict(dict)
+    congested = 0
 
-                        current_queues[iface] = backlog
+    for key in r.scan_iter("topo:link:*"):
+        link = r.hgetall(key)
+        if not link or link.get("status", "UP") != "UP":
+            continue
+        src = link.get("src")
+        local_iface = link.get("local_iface")
+        host_iface = link.get("host_iface")
+        if not src or not local_iface or not host_iface:
+            continue
 
-            # 每轮覆盖该节点的队列快照，避免接口消失后旧字段继续误导 Lyapunov。
-            pipe = r.pipeline()
-            pipe.delete(redis_key)
-            if current_queues:
-                pipe.hset(redis_key, mapping=current_queues)
-                pipe.expire(redis_key, 5)
-            pipe.execute()
-            
-            active_nodes += 1
-                        
-        except subprocess.TimeoutExpired:
-            # 如果某个容器不响应，跳过，不影响全局
-            pass
-        except subprocess.CalledProcessError:
-            # 有些容器可能没有 tc 命令或者不是卫星节点，默默忽略
-            pass
-        except Exception:
-            pass
+        current = qdisc_stats.get(host_iface, {"backlog": 0, "dropped": 0})
+        dropped = current["dropped"]
+        dropped_delta = max(0, dropped - _last_dropped.get(host_iface, dropped))
+        _last_dropped[host_iface] = dropped
 
-    logging.info(f"本轮采集完毕：成功扫描 {active_nodes}/{len(containers)} 个容器。")
+        # Backlog is the primary Lyapunov queue. Recent actual drops add a
+        # short-lived congestion penalty when a full queue drains between polls.
+        queue_score = current["backlog"] + dropped_delta * DROP_PENALTY_BYTES
+        telemetry[src][local_iface] = queue_score
+        if queue_score > 0:
+            congested += 1
 
-if __name__ == '__main__':
-    logging.info("集中式 Docker 队列探针 (Host-based) 启动...")
+    pipe = r.pipeline(transaction=False)
+    old_keys = list(r.scan_iter("telemetry:queue:*"))
+    for key in old_keys:
+        pipe.delete(key)
+    for node, queues in telemetry.items():
+        key = f"telemetry:queue:{node}"
+        pipe.hset(key, mapping=queues)
+        pipe.expire(key, max(5, int(POLL_INTERVAL_SECONDS * 5)))
+    pipe.set("telemetry:queue:last_update_unix", f"{time.time():.6f}")
+    pipe.execute()
+
+    logging.info(
+        "host qdisc telemetry: nodes=%d links=%d congested=%d",
+        len(telemetry),
+        sum(len(queues) for queues in telemetry.values()),
+        congested,
+    )
+
+
+if __name__ == "__main__":
+    r.ping()
+    logging.info("OpenSN host queue monitor started")
     while True:
-        collect_queues()
-        time.sleep(1) # 每秒扫描一次全网
+        started = time.monotonic()
+        try:
+            collect_queues()
+        except KeyboardInterrupt:
+            break
+        except Exception as exc:
+            logging.error("queue collection failed: %s", exc)
+        elapsed = time.monotonic() - started
+        time.sleep(max(0.2, POLL_INTERVAL_SECONDS - elapsed))
