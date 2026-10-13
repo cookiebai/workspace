@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -25,6 +26,21 @@ type MasterNodeModule struct {
 
 func RegisterHandlers(r *gin.Engine) {
 	api := r.Group("/api")
+	api.Use(func(c *gin.Context) {
+		if os.Getenv("OPENSN_WEB_ONLY") == "1" && c.Request.Method != http.MethodGet {
+			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"code": -1, "msg": "Frozen topology: read-only web recovery; rebuild through the lab deployment script to enable editing."})
+			return
+		}
+		if !config.GlobalConfig.App.EnableMonitor && strings.HasPrefix(c.Request.URL.Path, "/api/resource/") {
+			var data interface{} = []interface{}{}
+			if strings.Contains(c.Request.URL.Path, "/last/link/") || strings.Contains(c.Request.URL.Path, "/last/instance/") {
+				data = map[string]interface{}{}
+			}
+			c.AbortWithStatusJSON(http.StatusOK, gin.H{"code": 0, "msg": "Resource monitor disabled", "data": data, "monitor_enabled": false})
+			return
+		}
+		c.Next()
+	})
 	platform := api.Group("/platform")
 	platform.GET("/address/etcd", handler.GetEtcdAddressHandler)
 	platform.GET("/address/influxdb", handler.GetInfluxDBAddressHandler)

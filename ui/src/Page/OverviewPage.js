@@ -17,7 +17,7 @@ export const Overview = () => {
     const [messageApi, contextHolder] = message.useMessage();
     const [running,setRunning] = useState(false)
     const [typeConfig,setTypeConfig] = useState({})
-    const [resourcePercent,setResourcePercent] = useState("CPU:0% Memroy:0MB SwapMemory:0MB")
+    const [resourcePercent,setResourcePercent] = useState("资源监控未启用；实验吞吐量请查看 results/latest/summary.txt")
     const [instanceList,setInstanceList] = useState([])
     const [linkList,setLinkList] = useState([])
     const [nodeList,setNodeList] = useState([])
@@ -39,6 +39,7 @@ export const Overview = () => {
             setLinkList(response.data.data?response.data.data:[])
         })
         GetAllNodeResource((response)=>{
+            if (response.data.monitor_enabled === false) return;
             let allCPU = 0
             let allMem = 0
             let allSwapMem = 0
@@ -74,7 +75,7 @@ export const Overview = () => {
             })
             setColor(colorMap)
         })
-        setInterval(()=>{
+        const overviewTimer = setInterval(()=>{
             GetEmulationConfig((response)=>{
                 setRunning(response.data.data.running)
                 setTypeConfig(response.data.data.type_config?response.data.data.type_config:{})
@@ -89,6 +90,7 @@ export const Overview = () => {
                 setLinkList(response.data.data?response.data.data:[])
             })
             GetAllNodeResource((response)=>{
+                if (response.data.monitor_enabled === false) return;
                 let allCPU = 0
                 let allMem = 0
                 let allSwapMem = 0
@@ -108,7 +110,7 @@ export const Overview = () => {
             })
             
         },10000)
-        setInterval(()=>{
+        const linkTimer = setInterval(()=>{
             GetAllLinkLastResource((response)=>{
                 let resourceList = response.data.data
                 let maxThroughput = 0
@@ -128,6 +130,7 @@ export const Overview = () => {
                 setColor(colorMap)
             })
         },6000)
+        return () => { clearInterval(overviewTimer); clearInterval(linkTimer); };
     },[])
 
     const items = [
@@ -347,7 +350,7 @@ export const Overview = () => {
         <Divider/>
         <Card style={{width:"100%"}}>
             <Typography.Title level={4}>3D可视化展示</Typography.Title>
-            <Viewer timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false}>
+            <Viewer baseLayer={false} baseLayerPicker={false} timeline={false} homeButton={false} geocoder={false} animation={false} navigationHelpButton={false} fullscreenButton={false}>
                 {   
                     
                     instanceList.map((item,index) => {
@@ -405,7 +408,7 @@ export const Overview = () => {
                                     <PolylineGraphics
                                         positions={Cartesian3.fromRadiansArrayHeights(array)}
                                         width={1}
-                                        material={linkColor[item.link_id]}
+                                        material={linkColor[item.link_id] || Color.LIME}
                                         
                                     />
                                     

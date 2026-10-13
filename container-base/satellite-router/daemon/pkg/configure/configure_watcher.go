@@ -2,26 +2,24 @@ package configure
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"satellite/data"
 	"satellite/model"
+	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 )
 
 var NewConfigurationChan chan model.TopoInfo = make(chan model.TopoInfo)
-var ConfigureFileWatcher *fsnotify.Watcher
 
 func parseConfigFile(path string) (model.TopoInfo, error) {
 	var ret model.TopoInfo
 	fd, err := os.Open(path)
-	defer fd.Close()
 	if err != nil {
 		logrus.Errorf("Open Topo Infomation File Error: %s", err.Error())
 		return ret, err
 	}
+	defer fd.Close()
 	decoder := json.NewDecoder(fd)
 	err = decoder.Decode(&ret)
 	if err != nil {
@@ -32,21 +30,21 @@ func parseConfigFile(path string) (model.TopoInfo, error) {
 }
 
 func InitConfigurationWatcher(watchPath string) {
-	wather, err := fsnotify.NewWatcher()
-	if err != nil {
-		err = fmt.Errorf("create configuration file watcher error: %s", err.Error())
-		panic(err)
-	}
-	wather.Add(watchPath)
 	go func() {
-		defer wather.Close()
-		for event := range wather.Events {
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				newConfiguration, err := parseConfigFile(watchPath)
-				if err == nil {
+		// One fsnotify instance per container exhausts the host-wide inotify
+		// instance limit at a few hundred emulated nodes. Configuration changes
+		// are infrequent, so portable polling is cheaper and scales linearly.
+		var lastMod time.Time
+		for {
+			info, err := os.Stat(watchPath)
+			if err == nil && info.ModTime().After(lastMod) {
+				newConfiguration, parseErr := parseConfigFile(watchPath)
+				if parseErr == nil {
 					data.TopoInfo = newConfiguration
+					lastMod = info.ModTime()
 				}
 			}
+			time.Sleep(250 * time.Millisecond)
 		}
 	}()
 }

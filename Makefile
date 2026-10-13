@@ -26,7 +26,13 @@ clean:
 	cd dependencies && make clean
 	cd daemon && make clean
 
-.PHONY: node-daemon sync-config
+.PHONY: node-daemon sync-config web-node-daemon
+web-node-daemon:
+	cd ui && npm ci --no-audit --no-fund && GENERATE_SOURCEMAP=false npm run build
+	mkdir -p daemon/share/static/dist/build
+	cp -a ui/build/. daemon/share/static/dist/build/
+	$(MAKE) node-daemon
+
 node-daemon:
 	@echo "Building NodeDaemon from daemon/go.mod"
 	GO111MODULE=on go -C daemon build -o ../NodeDaemon .

@@ -4,6 +4,7 @@ import (
 	"NodeDaemon/config"
 	"NodeDaemon/pkg/initializer"
 	"NodeDaemon/pkg/module"
+	"NodeDaemon/utils"
 	"fmt"
 	"os"
 	"os/signal"
@@ -42,7 +43,20 @@ func main() {
 		config.InitConfig(DefaultConfigPath)
 	}
 
-	err := initializer.NodeInit()
+	// Restore the UI for a frozen data plane without allocating a second node.
+	webOnly := os.Getenv("OPENSN_WEB_ONLY") == "1"
+	var err error
+	if webOnly {
+		err = initializer.InitWorkdir()
+		if err == nil {
+			err = config.InitConfigMasterMode()
+		}
+		if err == nil {
+			err = utils.InitEtcdClient(config.GlobalConfig.Dependency.EtcdAddr, config.GlobalConfig.Dependency.EtcdPort)
+		}
+	} else {
+		err = initializer.NodeInit()
+	}
 	if err != nil {
 		errMsg := fmt.Sprintf("Init Node Error: %s", err.Error())
 		logrus.Error(errMsg)
@@ -54,6 +68,9 @@ func main() {
 		module.CreateConfigWriteModule(),
 		module.CreateLinkParameterModule(),
 		module.CreateWebshellModule(),
+	}
+	if webOnly {
+		modules = nil
 	}
 
 	if !config.GlobalConfig.App.IsServant {

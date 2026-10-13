@@ -92,7 +92,7 @@ def collect_queues():
         if queue_score > 0:
             congested += 1
 
-    pipe = r.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=True)
     old_keys = list(r.scan_iter("telemetry:queue:*"))
     for key in old_keys:
         pipe.delete(key)
